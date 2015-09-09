@@ -33,24 +33,24 @@ Clone last V8 source trunk, build dependencies and checkout 3.27.0
 
 Build V8 with the following recommended flags
 
-    $ make \ 
-      objectprint=off \ 
-      i18nsupport=off \ 
-      verifyheap=off \ 
-      debuggersupport=on \ 
-      regexp=native \ 
-      vtunejit=off \ 
-      extrachecks=off \ 
-      visibility=on \ 
-      snapshot=on \ 
-      strictaliasing=on \ 
-      liveobjectlist=off \ 
-      backtrace=on \ 
-      gdbjit=off \ 
-      disassembler=off \ 
-      werror=no \ 
-      library=shared \ 
-      soname_version=$V8_VERSION \
+    $ make \
+      objectprint=off \
+      i18nsupport=off \
+      verifyheap=off \
+      debuggersupport=on \
+      regexp=native \
+      vtunejit=off \
+      extrachecks=off \
+      visibility=on \
+      snapshot=on \
+      strictaliasing=on \
+      liveobjectlist=off \
+      backtrace=on \
+      gdbjit=off \
+      disassembler=off \
+      werror=no \
+      library=shared \
+      soname_version=$V8_VERSION 
       x64.release
 
 Install libs and headers in prefix location
