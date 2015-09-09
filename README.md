@@ -14,7 +14,7 @@ Currently all installation process is tested on CentOS release 6.5 (Final) x86_6
 
 First of all prepare gcc, v8 library and environment
 
-Use gcc version >=4.7.3.
+Use gcc version >=4.7.0
 If you have a proper gcc version installed under prefix location:
 
     $ export CXX=/usr/local/gcc-4.7.3/bin/c++ 
