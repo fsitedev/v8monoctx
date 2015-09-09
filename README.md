@@ -50,11 +50,12 @@ Build V8 with the following recommended flags
       disassembler=off \
       werror=no \
       library=shared \
-      soname_version=$V8_VERSION 
+      soname_version=$V8_VERSION \
       x64.release
 
 Install libs and headers in prefix location
 
+    $ sudo -E bash -c 'mkdir -p $V8_PREFIX/{bin,include,lib64}'
     $ sudo -E bash -c 'install -D -m 755 out/x64.release/{cctest,d8,lineprocessor,mksnapshot.x64,process,shell} $V8_PREFIX/bin'
     $ sudo -E bash -c 'install -D -m 644 include/*.h $V8_PREFIX/include'
     $ sudo -E bash -c 'install -D -m 755 out/x64.release/lib.target/libv8.so.$V8_VERSION $V8_PREFIX/lib64'
