@@ -18,7 +18,7 @@ install:
 	install -m 0755 $(TARGET_LIB) $(TARGET_DIR)
 	install -m 0644 -T $(TARGET).h /usr/local/include/$(TARGET).h
 	echo "/usr/local/lib64" > /etc/ld.so.conf.d/$(TARGET).conf
-	ldconfig -n $(TARGET_DIR)
+	ldconfig
 
 clean:
 	rm -rf *.o *.so
