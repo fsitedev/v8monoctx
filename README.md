@@ -63,7 +63,7 @@ Install libs and headers in prefix location
 Configure dynamic linker
 
     $ sudo -E bash -c 'echo "$V8_PREFIX/lib64" > /etc/ld.so.conf.d/v8-$V8_VERSION.conf'
-    $ sudo -E bash -c 'ldconfig -n $V8_PREFIX/lib64'
+    $ sudo ldconfig
 
 Finally build and install v8monoctx.so shared library
 
