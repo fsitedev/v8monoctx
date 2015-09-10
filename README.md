@@ -2,7 +2,7 @@
 
 Used to run javascript files within one v8 context
 
-Basically intended to be used as a library in [V8::MonoContext][1](perl), (?)python modules
+Basically intended to be used as a library in [V8::MonoContext][1](perl), [PyV8Mono][1](python)
 
 # V8 dependence
 
@@ -73,3 +73,4 @@ Finally build and install v8monoctx.so shared library
     $ sudo -E bash -c 'make install'
 
 [1]: https://github.com/fsitedev/V8-MonoContext
+[2]: https://github.com/bekbulatov/PyV8Mono
