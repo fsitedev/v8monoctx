@@ -2,7 +2,7 @@
 
 Used to run javascript files within one v8 context
 
-Basically intended to be used as a library in [V8::MonoContext][1](perl), [PyV8Mono][1](python)
+Basically intended to be used as a library in [V8::MonoContext][1](perl), [PyV8Mono][2](python)
 
 # V8 dependence
 
