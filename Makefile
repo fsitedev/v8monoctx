@@ -1,14 +1,18 @@
 # export V8_VERSION=xxx
+# export V8_PREFIX=xxx
 
-VERSION		= 1.0
-CC			= g++
-INC			= -I/usr/local/v8-$(V8_VERSION)/include
-LIBS		= -L/usr/local/v8-$(V8_VERSION)/lib64 -l:libv8.so.$(V8_VERSION)
-CFLAGS		= -fpic -g -Wall
-TARGET		= v8monoctx
-TARGET_LIB	= lib$(TARGET).$(VERSION).so
-TARGET_DIR	= /usr/local/lib64
+VERSION     = 1.0
+CC          = g++
+INC         = -I$(V8_PREFIX)/include
+LIBS        = -L$(V8_PREFIX)/lib64 -l:libv8.so.$(V8_VERSION)
 
+CFLAGS      = -fpic -g -Wall
+TARGET      = v8monoctx
+TARGET_LIB  = lib$(TARGET).$(VERSION).so
+TARGET_DIR  = /usr/local/lib64
+INCLUDE_DIR = /usr/local/include
+DESTDIR     =
+ 
 all: $(TARGET)
 
 $(TARGET):
@@ -16,11 +20,11 @@ $(TARGET):
 	$(CC) -shared $(LIBS) -o $(TARGET_LIB) $(TARGET).o
 
 install:
-	install -m 0755 $(TARGET_LIB) $(TARGET_DIR)
-	install -m 0644 -T $(TARGET).h /usr/local/include/$(TARGET).h
-	echo "/usr/local/lib64" > /etc/ld.so.conf.d/$(TARGET).conf
-	ln -fs $(TARGET_DIR)/$(TARGET_LIB) $(TARGET_DIR)/lib$(TARGET).so
-	ldconfig
+	install -m 0755 -D -T $(TARGET_LIB) $(DESTDIR)$(TARGET_DIR)/$(TARGET_LIB)
+	install -m 0644 -D -T $(TARGET).h $(DESTDIR)$(INCLUDE_DIR)/$(TARGET).h
+	ln -fs $(TARGET_LIB) $(DESTDIR)$(TARGET_DIR)/lib$(TARGET).so
+	mkdir -p $(DESTDIR)/etc/ld.so.conf.d
+	echo "$(TARGET_DIR)" > $(DESTDIR)/etc/ld.so.conf.d/$(TARGET).conf
 
 clean:
 	rm -rf *.o *.so
