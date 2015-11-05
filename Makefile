@@ -17,7 +17,7 @@ all: $(TARGET)
 
 $(TARGET):
 	$(CC) -c $(CFLAGS) $(INC) $(TARGET).cpp
-	$(CC) -shared $(LIBS) -o $(TARGET_LIB) $(TARGET).o
+	$(CC) -shared -Wl,-soname,$(TARGET_LIB) $(LIBS) -o $(TARGET_LIB) $(TARGET).o
 
 install:
 	install -m 0755 -D -T $(TARGET_LIB) $(DESTDIR)$(TARGET_DIR)/$(TARGET_LIB)
