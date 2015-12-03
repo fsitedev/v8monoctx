@@ -2,13 +2,13 @@
 
 using namespace v8;
 
-Isolate* isolate;
-Persistent<Context> context;
-std::map<std::string, time_t> ScriptModified;
-std::map<std::string, PERSISTENT_COPYABLE> ScriptCached;
+static Isolate* isolate;
+static Persistent<Context> context;
+static std::map<std::string, time_t> ScriptModified;
+static std::map<std::string, PERSISTENT_COPYABLE> ScriptCached;
 
-std::string GlobalData;
-std::vector<std::string> GlobalError;
+static std::string GlobalData;
+static std::vector<std::string> GlobalError;
 
 // Profiler functions
 void StartProfile(struct timeval *t1) {
