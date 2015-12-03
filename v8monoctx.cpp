@@ -126,7 +126,7 @@ std::vector<std::string> GetErrors (void) {
 }
 
 
-bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string run, std::string* json, std::string* out) {
+bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string* json, std::string* out) {
 	GlobalError.clear();
 
 	++cfg->request_num;
@@ -191,7 +191,6 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	}
 
 	Local<Script> script;
-	bool run_script = true;
 	if (ScriptCached.find(key) == ScriptCached.end() || (cfg->watch_templates && ScriptModified[key] != stat_buf.st_mtime)) {
 /*
 		if (ScriptCached.find(key) == ScriptCached.end()) {
@@ -235,58 +234,19 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		ScriptCached[key].Reset(isolate, script);
 		ScriptModified[key] = stat_buf.st_mtime;
 	}
-	else if (run.length() == 0) {
-		script = Local<Script>::New(isolate, ScriptCached[key]);
-	}
 	else {
-		run_script = false;
+		script = Local<Script>::New(isolate, ScriptCached[key]);
 	}
 
 	v8::Handle<v8::Value> result;
-	if (run_script == true) {
-		struct timeval t1; StartProfile(&t1);
-			result = script->Run();
-		cfg->exec_time += StopProfile(&t1);
+	struct timeval t1; StartProfile(&t1);
+		result = script->Run();
+	cfg->exec_time += StopProfile(&t1);
 
-		if (result.IsEmpty()) {
-			assert(try_catch.HasCaught());
-			ReportException(&try_catch);
-			return false;
-		}
-	}
-
-	if (run.length() > 0) {
-		if (ScriptCached.find(run) == ScriptCached.end()) {
-			Handle<String> ffn = String::NewFromUtf8(isolate, run.c_str());
-
-			struct timeval t1; StartProfile(&t1);
-				script = Script::Compile(ffn, ffn);
-			cfg->compile_time += StopProfile(&t1);
-
-			if (script.IsEmpty()) {
-				ReportException(&try_catch);
-				return false;
-			}
-
-			PERSISTENT_COPYABLE pscript;
-
-			ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(run, pscript) );
-			ScriptCached[run].Reset(isolate, script);
-		}
-		else {
-			script = Local<Script>::New(isolate, ScriptCached[run]);
-		}
-
-		struct timeval t1;
-		StartProfile(&t1);
-			result = script->Run();
-		cfg->exec_time += StopProfile(&t1);
-
-		if (result.IsEmpty()) {
-			assert(try_catch.HasCaught());
-			ReportException(&try_catch);
-			return false;
-		}
+	if (result.IsEmpty()) {
+		assert(try_catch.HasCaught());
+		ReportException(&try_catch);
+		return false;
 	}
 
 	// No errors

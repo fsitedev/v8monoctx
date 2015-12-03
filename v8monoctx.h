@@ -68,7 +68,7 @@ void ConsoleError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 std::vector<std::string> GetErrors (void);
 
-bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string run, std::string* json, std::string* out);
+bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string* json, std::string* out);
 
 // V8 gc interfaces
 bool IdleNotification(int ms);
