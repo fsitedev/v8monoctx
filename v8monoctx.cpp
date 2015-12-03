@@ -30,11 +30,11 @@ const char* ToCString(const v8::String::Utf8Value& value) {
 std::string ReadFile(std::string name) {
 	FILE* file = fopen(name.c_str(), "rb");
 	if (file == NULL) return std::string();
-	
+
 	fseek(file, 0, SEEK_END);
 	int size = ftell(file);
 	rewind(file);
-	
+
 	char* chars = new char[size + 1];
 	chars[size] = '\0';
 	for (int i = 0; i < size;) {
@@ -42,7 +42,7 @@ std::string ReadFile(std::string name) {
 		i += read;
 	}
 	fclose(file);
-	
+
 	std::string result(chars);
 	delete[] chars;
 	return result;
@@ -155,7 +155,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		// Create a new context
 		v8::Handle<v8::Context> ctx = Context::New(isolate, NULL, global);
 		context.Reset(isolate, ctx);
-	
+
 		if (context.IsEmpty()) {
 			std::string _err("Error creating context");
 			GlobalError.push_back(_err);
@@ -183,9 +183,9 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 			_err += fname;
 			_err += ": ";
 			_err += strerror(errno);
-	
+
 			GlobalError.push_back(_err);
-	
+
 			return false;
 		}
 	}
@@ -206,7 +206,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		if (file.size() == 0) {
 			std::string _err("File not exists or empty: ");
 			_err += fname;
-	
+
 			GlobalError.push_back(_err);
 			return false;
 		}
@@ -242,7 +242,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		run_script = false;
 	}
 
-	v8::Handle<v8::Value> result; 
+	v8::Handle<v8::Value> result;
 	if (run_script == true) {
 		struct timeval t1; StartProfile(&t1);
 			result = script->Run();
@@ -258,18 +258,18 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	if (run.length() > 0) {
 		if (ScriptCached.find(run) == ScriptCached.end()) {
 			Handle<String> ffn = String::NewFromUtf8(isolate, run.c_str());
-	
+
 			struct timeval t1; StartProfile(&t1);
 				script = Script::Compile(ffn, ffn);
 			cfg->compile_time += StopProfile(&t1);
-	
+
 			if (script.IsEmpty()) {
 				ReportException(&try_catch);
 				return false;
 			}
-	
+
 			PERSISTENT_COPYABLE pscript;
-	
+
 			ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(run, pscript) );
 			ScriptCached[run].Reset(isolate, script);
 		}

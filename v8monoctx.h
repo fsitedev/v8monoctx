@@ -28,6 +28,7 @@ struct monocfg {
 	unsigned int run_low_memory_notification; // call LowMemoryNotification after number of requests
 	unsigned int run_idle_notification_loop;// call IdleNotification loop after number of requests
 	bool watch_templates; // if template changed since last compilation - recompile it
+	char cmd_args[CMD_ARGS_LEN]; // command like arguments for v8 tuning
 
 	/* counters */
 	unsigned int request_num; // requests totally processed
@@ -35,7 +36,6 @@ struct monocfg {
 	double run_idle_notification_loop_time;
 	double compile_time;
 	double exec_time;
-	char cmd_args[CMD_ARGS_LEN];
 };
 
 // Heap statistics struct
@@ -47,7 +47,7 @@ typedef struct heapst {
 	size_t total_physical_size;
 } HeapSt;
 
-// Profiler and stat functions 
+// Profiler and stat functions
 void StartProfile(struct timeval *t1);
 double StopProfile(struct timeval *t1);
 void GetHeapStat(HeapSt * st);
@@ -66,7 +66,7 @@ void DataFetch(const v8::FunctionCallbackInfo<v8::Value>& args);
 // Global console.error function
 void ConsoleError(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-std::vector<std::string> GetErrors (void); 
+std::vector<std::string> GetErrors (void);
 
 bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string run, std::string* json, std::string* out);
 
