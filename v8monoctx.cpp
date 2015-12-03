@@ -2,8 +2,14 @@
 
 static v8::Isolate* isolate;
 static v8::Persistent<v8::Context> context;
-static std::map<std::string, time_t> ScriptModified;
-static std::map<std::string, PERSISTENT_COPYABLE> ScriptCached;
+
+/* maps for caching templates (ExecuteFile) */
+static std::map<std::string, time_t> ExecuteScriptModified;
+static std::map<std::string, PERSISTENT_COPYABLE> ExecuteScriptCached;
+
+/* maps for caching utilites (LoadFile) */
+static std::map<std::string, time_t> LoadScriptModified;
+static std::map<std::string, PERSISTENT_COPYABLE> LoadScriptCached;
 
 static std::string GlobalData;
 static std::vector<std::string> GlobalError;
@@ -182,9 +188,9 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 	}
 
 	v8::Local<v8::Script> script;
-	if (ScriptCached.find(key) == ScriptCached.end() || (cfg->watch_templates && ScriptModified[key] != stat_buf.st_mtime)) {
+	if (LoadScriptCached.find(key) == LoadScriptCached.end() || (cfg->watch_templates && LoadScriptModified[key] != stat_buf.st_mtime)) {
 /*
-		if (ScriptCached.find(key) == ScriptCached.end()) {
+		if (LoadScriptCached.find(key) == LoadScriptCached.end()) {
 			fprintf(stderr, "New file: %s\n", fname.c_str());
 		}
 		else {
@@ -221,12 +227,12 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 
 		PERSISTENT_COPYABLE pscript;
 
-		ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
-		ScriptCached[key].Reset(isolate, script);
-		ScriptModified[key] = stat_buf.st_mtime;
+		LoadScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
+		LoadScriptCached[key].Reset(isolate, script);
+		LoadScriptModified[key] = stat_buf.st_mtime;
 	}
 	else {
-		script = v8::Local<v8::Script>::New(isolate, ScriptCached[key]);
+		script = v8::Local<v8::Script>::New(isolate, LoadScriptCached[key]);
 	}
 
 	v8::Handle<v8::Value> result;
@@ -310,9 +316,9 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	}
 
 	v8::Local<v8::Script> script;
-	if (ScriptCached.find(key) == ScriptCached.end() || (cfg->watch_templates && ScriptModified[key] != stat_buf.st_mtime)) {
+	if (ExecuteScriptCached.find(key) == ExecuteScriptCached.end() || (cfg->watch_templates && ExecuteScriptModified[key] != stat_buf.st_mtime)) {
 /*
-		if (ScriptCached.find(key) == ScriptCached.end()) {
+		if (ExecuteScriptCached.find(key) == ExecuteScriptCached.end()) {
 			fprintf(stderr, "New file: %s\n", fname.c_str());
 		}
 		else {
@@ -349,12 +355,12 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 
 		PERSISTENT_COPYABLE pscript;
 
-		ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
-		ScriptCached[key].Reset(isolate, script);
-		ScriptModified[key] = stat_buf.st_mtime;
+		ExecuteScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
+		ExecuteScriptCached[key].Reset(isolate, script);
+		ExecuteScriptModified[key] = stat_buf.st_mtime;
 	}
 	else {
-		script = v8::Local<v8::Script>::New(isolate, ScriptCached[key]);
+		script = v8::Local<v8::Script>::New(isolate, ExecuteScriptCached[key]);
 	}
 
 	v8::Handle<v8::Value> result;
