@@ -1,9 +1,7 @@
 #include "v8monoctx.h"
 
-using namespace v8;
-
-static Isolate* isolate;
-static Persistent<Context> context;
+static v8::Isolate* isolate;
+static v8::Persistent<v8::Context> context;
 static std::map<std::string, time_t> ScriptModified;
 static std::map<std::string, PERSISTENT_COPYABLE> ScriptCached;
 
@@ -103,10 +101,10 @@ void ReportException(v8::TryCatch* try_catch) {
 // Global function
 void DataFetch(const v8::FunctionCallbackInfo<v8::Value>& args) {
 	// We will be creating temporary handles so we use a handle scope.
-	HandleScope handle_scope(args.GetIsolate());
+	v8::HandleScope handle_scope(args.GetIsolate());
 
 	args.GetReturnValue().Set(
-		String::NewFromUtf8(args.GetIsolate(), GlobalData.c_str())
+		v8::String::NewFromUtf8(args.GetIsolate(), GlobalData.c_str())
 	);
 }
 
@@ -153,7 +151,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		global->Set(v8::String::NewFromUtf8(isolate, "__errorLog"), v8::FunctionTemplate::New(isolate, ConsoleError));
 
 		// Create a new context
-		v8::Handle<v8::Context> ctx = Context::New(isolate, NULL, global);
+		v8::Handle<v8::Context> ctx = v8::Context::New(isolate, NULL, global);
 		context.Reset(isolate, ctx);
 
 		if (context.IsEmpty()) {
@@ -190,7 +188,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		}
 	}
 
-	Local<Script> script;
+	v8::Local<v8::Script> script;
 	if (ScriptCached.find(key) == ScriptCached.end() || (cfg->watch_templates && ScriptModified[key] != stat_buf.st_mtime)) {
 /*
 		if (ScriptCached.find(key) == ScriptCached.end()) {
@@ -211,8 +209,8 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		}
 
 		std::string file_append = file + append;
-		Handle<String> source = String::NewFromUtf8(isolate, file_append.c_str());
-		Handle<String> ffn = String::NewFromUtf8(isolate, fname.c_str());
+		v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, file_append.c_str());
+		v8::Handle<v8::String> ffn = v8::String::NewFromUtf8(isolate, fname.c_str());
 
 		// Origin
 		v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
@@ -220,7 +218,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		v8::ScriptOrigin origin(ffn, line, column);
 
 		struct timeval t1; StartProfile(&t1);
-			script = Script::Compile(source, &origin);
+			script = v8::Script::Compile(source, &origin);
 		cfg->compile_time += StopProfile(&t1);
 
 		if (script.IsEmpty()) {
@@ -235,7 +233,7 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		ScriptModified[key] = stat_buf.st_mtime;
 	}
 	else {
-		script = Local<Script>::New(isolate, ScriptCached[key]);
+		script = v8::Local<v8::Script>::New(isolate, ScriptCached[key]);
 	}
 
 	v8::Handle<v8::Value> result;

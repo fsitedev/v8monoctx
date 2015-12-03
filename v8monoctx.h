@@ -20,8 +20,6 @@
 #define PERSISTENT_COPYABLE v8::Persistent<v8::Script, v8::CopyablePersistentTraits<v8::Script> >
 #define CMD_ARGS_LEN 250
 
-using namespace v8;
-
 // Configuration struct
 struct monocfg {
 	/* config */
