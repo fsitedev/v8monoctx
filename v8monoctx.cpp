@@ -1,14 +1,18 @@
 #include "v8monoctx.h"
 
-using namespace v8;
+static v8::Isolate* isolate;
+static v8::Persistent<v8::Context> context;
 
-Isolate* isolate;
-Persistent<Context> context;
-std::map<std::string, time_t> ScriptModified;
-std::map<std::string, PERSISTENT_COPYABLE> ScriptCached;
+/* maps for caching templates (ExecuteFile) */
+static std::map<std::string, time_t> ExecuteScriptModified;
+static std::map<std::string, PERSISTENT_COPYABLE> ExecuteScriptCached;
 
-std::string GlobalData;
-std::vector<std::string> GlobalError;
+/* maps for caching utilites (LoadFile) */
+static std::map<std::string, time_t> LoadScriptModified;
+static std::map<std::string, PERSISTENT_COPYABLE> LoadScriptCached;
+
+static std::string GlobalData;
+static std::vector<std::string> GlobalError;
 
 // Profiler functions
 void StartProfile(struct timeval *t1) {
@@ -30,11 +34,11 @@ const char* ToCString(const v8::String::Utf8Value& value) {
 std::string ReadFile(std::string name) {
 	FILE* file = fopen(name.c_str(), "rb");
 	if (file == NULL) return std::string();
-	
+
 	fseek(file, 0, SEEK_END);
 	int size = ftell(file);
 	rewind(file);
-	
+
 	char* chars = new char[size + 1];
 	chars[size] = '\0';
 	for (int i = 0; i < size;) {
@@ -42,7 +46,7 @@ std::string ReadFile(std::string name) {
 		i += read;
 	}
 	fclose(file);
-	
+
 	std::string result(chars);
 	delete[] chars;
 	return result;
@@ -103,10 +107,10 @@ void ReportException(v8::TryCatch* try_catch) {
 // Global function
 void DataFetch(const v8::FunctionCallbackInfo<v8::Value>& args) {
 	// We will be creating temporary handles so we use a handle scope.
-	HandleScope handle_scope(args.GetIsolate());
+	v8::HandleScope handle_scope(args.GetIsolate());
 
 	args.GetReturnValue().Set(
-		String::NewFromUtf8(args.GetIsolate(), GlobalData.c_str())
+		v8::String::NewFromUtf8(args.GetIsolate(), GlobalData.c_str())
 	);
 }
 
@@ -125,17 +129,7 @@ std::vector<std::string> GetErrors (void) {
 	return GlobalError;
 }
 
-
-bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string run, std::string* json, std::string* out) {
-	GlobalError.clear();
-
-	++cfg->request_num;
-
-	cfg->run_idle_notification_loop_time = 0;
-	cfg->run_low_memory_notification_time = 0;
-	cfg->exec_time = 0;
-	cfg->compile_time = 0;
-
+bool InitIsolate(monocfg *cfg) {
 	if (isolate == NULL) {
 		// Get the default Isolate created at startup
 		isolate = v8::Isolate::GetCurrent();
@@ -153,17 +147,132 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		global->Set(v8::String::NewFromUtf8(isolate, "__errorLog"), v8::FunctionTemplate::New(isolate, ConsoleError));
 
 		// Create a new context
-		v8::Handle<v8::Context> ctx = Context::New(isolate, NULL, global);
+		v8::Handle<v8::Context> ctx = v8::Context::New(isolate, NULL, global);
 		context.Reset(isolate, ctx);
-	
+
 		if (context.IsEmpty()) {
 			std::string _err("Error creating context");
 			GlobalError.push_back(_err);
-
 			return false;
 		}
 		ctx->Enter();
 	}
+	return true;
+}
+
+
+bool CompileFile(monocfg *cfg, std::string fname, std::string append, v8::Local<v8::Script> *script, v8::TryCatch *try_catch) {
+	// Read new file
+	std::string file = ReadFile(fname);
+	if (file.size() == 0) {
+		std::string _err("File not exists or empty: ");
+		_err += fname;
+
+		GlobalError.push_back(_err);
+		return false;
+	}
+
+	std::string file_append = append.empty() ? file : file + append;
+	v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, file_append.c_str());
+	v8::Handle<v8::String> ffn = v8::String::NewFromUtf8(isolate, fname.c_str());
+
+	// Origin
+	v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
+	v8::Handle<v8::Integer> column = v8::Integer::New(isolate, 0);
+	v8::ScriptOrigin origin(ffn, line, column);
+
+	struct timeval t1; StartProfile(&t1);
+		*script = v8::Script::Compile(source, &origin);
+	cfg->compile_time += StopProfile(&t1);
+
+	if (script->IsEmpty()) {
+		ReportException(try_catch);
+		return false;
+	}
+	return true;
+}
+
+bool LoadFile(monocfg *cfg, std::string fname) {
+	GlobalError.clear();
+
+	cfg->run_idle_notification_loop_time = 0;
+	cfg->run_low_memory_notification_time = 0;
+	cfg->exec_time = 0;
+	cfg->compile_time = 0;
+
+	if (!InitIsolate(cfg))
+		return false;
+
+	v8::HandleScope handle_scope(isolate);
+	v8::TryCatch try_catch;
+
+	// Get file stat
+	struct stat stat_buf;
+	if (cfg->watch_templates) {
+		if (stat(fname.c_str(), &stat_buf) != 0) {
+			std::string _err("Error opening file ");
+			_err += fname;
+			_err += ": ";
+			_err += strerror(errno);
+
+			GlobalError.push_back(_err);
+
+			return false;
+		}
+	}
+
+	std::string key = fname;
+	v8::Local<v8::Script> script;
+	if (LoadScriptCached.find(key) == LoadScriptCached.end() || (cfg->watch_templates && LoadScriptModified[key] != stat_buf.st_mtime)) {
+/*
+		if (LoadScriptCached.find(key) == LoadScriptCached.end()) {
+			fprintf(stderr, "New file: %s\n", fname.c_str());
+		}
+		else {
+			fprintf(stderr, "File modified: %s\n", fname.c_str());
+		}
+*/
+		if (!CompileFile(cfg, fname, "", &script, &try_catch))
+			return false;
+
+		PERSISTENT_COPYABLE pscript;
+
+		LoadScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
+		LoadScriptCached[key].Reset(isolate, script);
+		LoadScriptModified[key] = stat_buf.st_mtime;
+	}
+	else {
+		script = v8::Local<v8::Script>::New(isolate, LoadScriptCached[key]);
+	}
+
+	v8::Handle<v8::Value> result;
+	struct timeval t1; StartProfile(&t1);
+		result = script->Run();
+	cfg->exec_time += StopProfile(&t1);
+
+	if (result.IsEmpty()) {
+		assert(try_catch.HasCaught());
+		ReportException(&try_catch);
+		return false;
+	}
+
+	// No errors
+	assert(!try_catch.HasCaught());
+	return true;
+}
+
+bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::string* json, std::string* out) {
+	GlobalError.clear();
+
+	++cfg->request_num;
+
+	cfg->run_idle_notification_loop_time = 0;
+	cfg->run_low_memory_notification_time = 0;
+	cfg->exec_time = 0;
+	cfg->compile_time = 0;
+
+	if (!InitIsolate(cfg))
+		return false;
 
 	v8::HandleScope handle_scope(isolate);
 	v8::TryCatch try_catch;
@@ -172,121 +281,63 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 		GlobalData.assign(*json);
 	}
 
-	std::string key = fname + ' ' + append;
-
 	// Get file stat
 	struct stat stat_buf;
 	if (cfg->watch_templates) {
-		int rc = stat(fname.c_str(), &stat_buf);
-		if (rc != 0) {
+		if (stat(fname.c_str(), &stat_buf) != 0) {
 			std::string _err("Error opening file ");
 			_err += fname;
 			_err += ": ";
 			_err += strerror(errno);
-	
+
 			GlobalError.push_back(_err);
-	
 			return false;
 		}
 	}
 
-	Local<Script> script;
-	bool run_script = true;
-	if (ScriptCached.find(key) == ScriptCached.end() || (cfg->watch_templates && ScriptModified[key] != stat_buf.st_mtime)) {
+	// Reload context if has changed
+	if (cfg->watch_templates) {
+		for (std::map<std::string, time_t>::iterator it=LoadScriptModified.begin(); it!=LoadScriptModified.end(); ++it) {
+			if (LoadScriptModified[it->first] != stat_buf.st_mtime) {
+				if (!LoadFile(cfg, it->first.c_str()))
+					return false;
+			}
+		}
+	}
+
+	std::string key = fname + ' ' + append;
+	v8::Local<v8::Script> script;
+	if (ExecuteScriptCached.find(key) == ExecuteScriptCached.end() || (cfg->watch_templates && ExecuteScriptModified[key] != stat_buf.st_mtime)) {
 /*
-		if (ScriptCached.find(key) == ScriptCached.end()) {
+		if (ExecuteScriptCached.find(key) == ExecuteScriptCached.end()) {
 			fprintf(stderr, "New file: %s\n", fname.c_str());
 		}
 		else {
 			fprintf(stderr, "File modified: %s\n", fname.c_str());
 		}
 */
-		// Read new file
-		std::string file = ReadFile(fname);
-		if (file.size() == 0) {
-			std::string _err("File not exists or empty: ");
-			_err += fname;
-	
-			GlobalError.push_back(_err);
+		if (!CompileFile(cfg, fname, append, &script, &try_catch))
 			return false;
-		}
-
-		std::string file_append = file + append;
-		Handle<String> source = String::NewFromUtf8(isolate, file_append.c_str());
-		Handle<String> ffn = String::NewFromUtf8(isolate, fname.c_str());
-
-		// Origin
-		v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
-		v8::Handle<v8::Integer> column = v8::Integer::New(isolate, 0);
-		v8::ScriptOrigin origin(ffn, line, column);
-
-		struct timeval t1; StartProfile(&t1);
-			script = Script::Compile(source, &origin);
-		cfg->compile_time += StopProfile(&t1);
-
-		if (script.IsEmpty()) {
-			ReportException(&try_catch);
-			return false;
-		}
 
 		PERSISTENT_COPYABLE pscript;
 
-		ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
-		ScriptCached[key].Reset(isolate, script);
-		ScriptModified[key] = stat_buf.st_mtime;
-	}
-	else if (run.length() == 0) {
-		script = Local<Script>::New(isolate, ScriptCached[key]);
+		ExecuteScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(key, pscript) );
+		ExecuteScriptCached[key].Reset(isolate, script);
+		ExecuteScriptModified[key] = stat_buf.st_mtime;
 	}
 	else {
-		run_script = false;
+		script = v8::Local<v8::Script>::New(isolate, ExecuteScriptCached[key]);
 	}
 
-	v8::Handle<v8::Value> result; 
-	if (run_script == true) {
-		struct timeval t1; StartProfile(&t1);
-			result = script->Run();
-		cfg->exec_time += StopProfile(&t1);
+	v8::Handle<v8::Value> result;
+	struct timeval t1; StartProfile(&t1);
+		result = script->Run();
+	cfg->exec_time += StopProfile(&t1);
 
-		if (result.IsEmpty()) {
-			assert(try_catch.HasCaught());
-			ReportException(&try_catch);
-			return false;
-		}
-	}
-
-	if (run.length() > 0) {
-		if (ScriptCached.find(run) == ScriptCached.end()) {
-			Handle<String> ffn = String::NewFromUtf8(isolate, run.c_str());
-	
-			struct timeval t1; StartProfile(&t1);
-				script = Script::Compile(ffn, ffn);
-			cfg->compile_time += StopProfile(&t1);
-	
-			if (script.IsEmpty()) {
-				ReportException(&try_catch);
-				return false;
-			}
-	
-			PERSISTENT_COPYABLE pscript;
-	
-			ScriptCached.insert( std::pair<std::string, PERSISTENT_COPYABLE>(run, pscript) );
-			ScriptCached[run].Reset(isolate, script);
-		}
-		else {
-			script = Local<Script>::New(isolate, ScriptCached[run]);
-		}
-
-		struct timeval t1;
-		StartProfile(&t1);
-			result = script->Run();
-		cfg->exec_time += StopProfile(&t1);
-
-		if (result.IsEmpty()) {
-			assert(try_catch.HasCaught());
-			ReportException(&try_catch);
-			return false;
-		}
+	if (result.IsEmpty()) {
+		assert(try_catch.HasCaught());
+		ReportException(&try_catch);
+		return false;
 	}
 
 	// No errors
