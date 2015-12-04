@@ -206,8 +206,6 @@ bool LoadFile(monocfg *cfg, std::string fname) {
 	v8::HandleScope handle_scope(isolate);
 	v8::TryCatch try_catch;
 
-	std::string key = fname;
-
 	// Get file stat
 	struct stat stat_buf;
 	if (cfg->watch_templates) {
@@ -223,6 +221,7 @@ bool LoadFile(monocfg *cfg, std::string fname) {
 		}
 	}
 
+	std::string key = fname;
 	v8::Local<v8::Script> script;
 	if (LoadScriptCached.find(key) == LoadScriptCached.end() || (cfg->watch_templates && LoadScriptModified[key] != stat_buf.st_mtime)) {
 /*
@@ -282,8 +281,6 @@ bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::strin
 		GlobalData.assign(*json);
 	}
 
-	std::string key = fname + ' ' + append;
-
 	// Get file stat
 	struct stat stat_buf;
 	if (cfg->watch_templates) {
@@ -298,6 +295,17 @@ bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::strin
 		}
 	}
 
+	// Reload context if has changed
+	if (cfg->watch_templates) {
+		for (std::map<std::string, time_t>::iterator it=LoadScriptModified.begin(); it!=LoadScriptModified.end(); ++it) {
+			if (LoadScriptModified[it->first] != stat_buf.st_mtime) {
+				if (!LoadFile(cfg, it->first.c_str()))
+					return false;
+			}
+		}
+	}
+
+	std::string key = fname + ' ' + append;
 	v8::Local<v8::Script> script;
 	if (ExecuteScriptCached.find(key) == ExecuteScriptCached.end() || (cfg->watch_templates && ExecuteScriptModified[key] != stat_buf.st_mtime)) {
 /*
@@ -320,17 +328,6 @@ bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::strin
 	else {
 		script = v8::Local<v8::Script>::New(isolate, ExecuteScriptCached[key]);
 	}
-
-	/*
-	if (cfg->watch_templates) {
-		for (std::map<std::string, time_t>::iterator it=LoadScriptModified.begin(); it!=LoadScriptModified.end(); ++it) {
-			if (LoadScriptModified[it->first] != stat_buf.st_mtime) {
-				fprintf(stderr, "Reload %s %d %d\n", it->first.c_str(), (int)LoadScriptModified[it->first], (int)stat_buf.st_mtime);
-
-			}
-		}
-	}
-	*/
 
 	v8::Handle<v8::Value> result;
 	struct timeval t1; StartProfile(&t1);
