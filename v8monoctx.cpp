@@ -129,14 +129,7 @@ std::vector<std::string> GetErrors (void) {
 	return GlobalError;
 }
 
-bool LoadFile(monocfg * cfg, std::string fname) {
-	GlobalError.clear();
-
-	cfg->run_idle_notification_loop_time = 0;
-	cfg->run_low_memory_notification_time = 0;
-	cfg->exec_time = 0;
-	cfg->compile_time = 0;
-
+bool InitIsolate(monocfg *cfg) {
 	if (isolate == NULL) {
 		// Get the default Isolate created at startup
 		isolate = v8::Isolate::GetCurrent();
@@ -160,11 +153,55 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 		if (context.IsEmpty()) {
 			std::string _err("Error creating context");
 			GlobalError.push_back(_err);
-
 			return false;
 		}
 		ctx->Enter();
 	}
+	return true;
+}
+
+
+bool CompileFile(monocfg *cfg, std::string fname, std::string append, v8::Local<v8::Script> *script, v8::TryCatch *try_catch) {
+	// Read new file
+	std::string file = ReadFile(fname);
+	if (file.size() == 0) {
+		std::string _err("File not exists or empty: ");
+		_err += fname;
+
+		GlobalError.push_back(_err);
+		return false;
+	}
+
+	std::string file_append = append.empty() ? file : file + append;
+	v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, file_append.c_str());
+	v8::Handle<v8::String> ffn = v8::String::NewFromUtf8(isolate, fname.c_str());
+
+	// Origin
+	v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
+	v8::Handle<v8::Integer> column = v8::Integer::New(isolate, 0);
+	v8::ScriptOrigin origin(ffn, line, column);
+
+	struct timeval t1; StartProfile(&t1);
+		*script = v8::Script::Compile(source, &origin);
+	cfg->compile_time += StopProfile(&t1);
+
+	if (script->IsEmpty()) {
+		ReportException(try_catch);
+		return false;
+	}
+	return true;
+}
+
+bool LoadFile(monocfg *cfg, std::string fname) {
+	GlobalError.clear();
+
+	cfg->run_idle_notification_loop_time = 0;
+	cfg->run_low_memory_notification_time = 0;
+	cfg->exec_time = 0;
+	cfg->compile_time = 0;
+
+	if (!InitIsolate(cfg))
+		return false;
 
 	v8::HandleScope handle_scope(isolate);
 	v8::TryCatch try_catch;
@@ -174,8 +211,7 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 	// Get file stat
 	struct stat stat_buf;
 	if (cfg->watch_templates) {
-		int rc = stat(fname.c_str(), &stat_buf);
-		if (rc != 0) {
+		if (stat(fname.c_str(), &stat_buf) != 0) {
 			std::string _err("Error opening file ");
 			_err += fname;
 			_err += ": ";
@@ -197,33 +233,8 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 			fprintf(stderr, "File modified: %s\n", fname.c_str());
 		}
 */
-		// Read new file
-		std::string file = ReadFile(fname);
-		if (file.size() == 0) {
-			std::string _err("File not exists or empty: ");
-			_err += fname;
-
-			GlobalError.push_back(_err);
+		if (!CompileFile(cfg, fname, "", &script, &try_catch))
 			return false;
-		}
-
-		std::string file_append = file;
-		v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, file_append.c_str());
-		v8::Handle<v8::String> ffn = v8::String::NewFromUtf8(isolate, fname.c_str());
-
-		// Origin
-		v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
-		v8::Handle<v8::Integer> column = v8::Integer::New(isolate, 0);
-		v8::ScriptOrigin origin(ffn, line, column);
-
-		struct timeval t1; StartProfile(&t1);
-			script = v8::Script::Compile(source, &origin);
-		cfg->compile_time += StopProfile(&t1);
-
-		if (script.IsEmpty()) {
-			ReportException(&try_catch);
-			return false;
-		}
 
 		PERSISTENT_COPYABLE pscript;
 
@@ -251,7 +262,7 @@ bool LoadFile(monocfg * cfg, std::string fname) {
 	return true;
 }
 
-bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::string* json, std::string* out) {
+bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::string* json, std::string* out) {
 	GlobalError.clear();
 
 	++cfg->request_num;
@@ -261,34 +272,8 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	cfg->exec_time = 0;
 	cfg->compile_time = 0;
 
-	if (isolate == NULL) {
-		// Get the default Isolate created at startup
-		isolate = v8::Isolate::GetCurrent();
-
-		// Create a stack-allocated handle scope
-		v8::HandleScope handle_scope(isolate);
-
-		if (strlen(cfg->cmd_args) > 0) {
-			v8::V8::SetFlagsFromString(cfg->cmd_args, strlen(cfg->cmd_args));
-		}
-
-		// Global objects
-		v8::Handle<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
-		global->Set(v8::String::NewFromUtf8(isolate, "__dataFetch"), v8::FunctionTemplate::New(isolate, DataFetch));
-		global->Set(v8::String::NewFromUtf8(isolate, "__errorLog"), v8::FunctionTemplate::New(isolate, ConsoleError));
-
-		// Create a new context
-		v8::Handle<v8::Context> ctx = v8::Context::New(isolate, NULL, global);
-		context.Reset(isolate, ctx);
-
-		if (context.IsEmpty()) {
-			std::string _err("Error creating context");
-			GlobalError.push_back(_err);
-
-			return false;
-		}
-		ctx->Enter();
-	}
+	if (!InitIsolate(cfg))
+		return false;
 
 	v8::HandleScope handle_scope(isolate);
 	v8::TryCatch try_catch;
@@ -302,15 +287,13 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	// Get file stat
 	struct stat stat_buf;
 	if (cfg->watch_templates) {
-		int rc = stat(fname.c_str(), &stat_buf);
-		if (rc != 0) {
+		if (stat(fname.c_str(), &stat_buf) != 0) {
 			std::string _err("Error opening file ");
 			_err += fname;
 			_err += ": ";
 			_err += strerror(errno);
 
 			GlobalError.push_back(_err);
-
 			return false;
 		}
 	}
@@ -325,33 +308,8 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 			fprintf(stderr, "File modified: %s\n", fname.c_str());
 		}
 */
-		// Read new file
-		std::string file = ReadFile(fname);
-		if (file.size() == 0) {
-			std::string _err("File not exists or empty: ");
-			_err += fname;
-
-			GlobalError.push_back(_err);
+		if (!CompileFile(cfg, fname, append, &script, &try_catch))
 			return false;
-		}
-
-		std::string file_append = file + append;
-		v8::Handle<v8::String> source = v8::String::NewFromUtf8(isolate, file_append.c_str());
-		v8::Handle<v8::String> ffn = v8::String::NewFromUtf8(isolate, fname.c_str());
-
-		// Origin
-		v8::Handle<v8::Integer> line = v8::Integer::New(isolate, 0);
-		v8::Handle<v8::Integer> column = v8::Integer::New(isolate, 0);
-		v8::ScriptOrigin origin(ffn, line, column);
-
-		struct timeval t1; StartProfile(&t1);
-			script = v8::Script::Compile(source, &origin);
-		cfg->compile_time += StopProfile(&t1);
-
-		if (script.IsEmpty()) {
-			ReportException(&try_catch);
-			return false;
-		}
 
 		PERSISTENT_COPYABLE pscript;
 
@@ -362,6 +320,17 @@ bool ExecuteFile(monocfg * cfg, std::string fname, std::string append, std::stri
 	else {
 		script = v8::Local<v8::Script>::New(isolate, ExecuteScriptCached[key]);
 	}
+
+	/*
+	if (cfg->watch_templates) {
+		for (std::map<std::string, time_t>::iterator it=LoadScriptModified.begin(); it!=LoadScriptModified.end(); ++it) {
+			if (LoadScriptModified[it->first] != stat_buf.st_mtime) {
+				fprintf(stderr, "Reload %s %d %d\n", it->first.c_str(), (int)LoadScriptModified[it->first], (int)stat_buf.st_mtime);
+
+			}
+		}
+	}
+	*/
 
 	v8::Handle<v8::Value> result;
 	struct timeval t1; StartProfile(&t1);
