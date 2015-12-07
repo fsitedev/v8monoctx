@@ -1,7 +1,7 @@
 # export V8_VERSION=xxx
 # export V8_PREFIX=xxx
 
-VERSION     = 1.0
+VERSION     = 1.1
 CC          = g++
 INC         = -I$(V8_PREFIX)/include
 LIBS        = -L$(V8_PREFIX)/lib64 -l:libv8.so.$(V8_VERSION)
@@ -12,7 +12,7 @@ TARGET_LIB  = lib$(TARGET).$(VERSION).so
 TARGET_DIR  = /usr/local/lib64
 INCLUDE_DIR = /usr/local/include
 DESTDIR     =
- 
+
 all: $(TARGET)
 
 $(TARGET):
