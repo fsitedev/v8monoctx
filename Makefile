@@ -1,7 +1,7 @@
 # export V8_VERSION=xxx
 # export V8_PREFIX=xxx
 
-VERSION     = 1.1
+VERSION     = 1.2
 CC          = g++
 INC         = -I$(V8_PREFIX)/include
 LIBS        = -L$(V8_PREFIX)/lib64 -l:libv8.so.$(V8_VERSION)

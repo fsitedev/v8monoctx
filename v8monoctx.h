@@ -17,7 +17,7 @@
 #undef do_open
 #undef do_close
 
-#define PERSISTENT_COPYABLE v8::Persistent<v8::Script, v8::CopyablePersistentTraits<v8::Script> >
+// #define PERSISTENT_COPYABLE v8::Persistent<v8::Script, v8::CopyablePersistentTraits<v8::Script> >
 #define CMD_ARGS_LEN 250
 
 // Configuration struct
@@ -67,9 +67,11 @@ void ConsoleError(const v8::FunctionCallbackInfo<v8::Value>& args);
 std::vector<std::string> GetErrors (void);
 
 bool InitIsolate(monocfg *cfg);
-bool CompileFile(monocfg *cfg, std::string fname, std::string append, v8::Local<v8::Script> *script, v8::TryCatch *try_catch);
+bool CompileFile(monocfg *cfg, std::string fname, v8::Local<v8::Script> *script, v8::TryCatch *try_catch);
+bool CompileSource(monocfg *cfg, std::string source_text, v8::Local<v8::Script> *script, v8::TryCatch *try_catch);
+
 bool LoadFile(monocfg *cfg, std::string fname);
-bool ExecuteFile(monocfg *cfg, std::string fname, std::string append, std::string* json, std::string* out);
+bool ExecuteFile(monocfg *cfg, std::string fname, std::string run, std::string* json, std::string* out);
 
 // V8 gc interfaces
 bool IdleNotification(int ms);
