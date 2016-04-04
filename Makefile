@@ -8,7 +8,7 @@ LIBS        = -L$(V8_PREFIX)/lib64 -l:libv8.so.$(V8_VERSION)
 
 CFLAGS      = -fpic -g -Wall
 TARGET      = v8monoctx
-TARGET_LIB  = lib$(TARGET).$(VERSION).so
+TARGET_LIB  = lib$(TARGET).so.$(VERSION) 
 TARGET_DIR  = /usr/local/lib64
 INCLUDE_DIR = /usr/local/include
 DESTDIR     =
