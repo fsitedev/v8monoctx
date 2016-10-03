@@ -71,6 +71,7 @@ bool CompileFile(monocfg *cfg, std::string fname, v8::Local<v8::Script> *script,
 bool CompileSource(monocfg *cfg, std::string source_text, v8::Local<v8::Script> *script, v8::TryCatch *try_catch);
 
 bool LoadFile(monocfg *cfg, std::string fname);
+bool LoadConfig(monocfg *cfg, std::string fname);
 bool ExecuteFile(monocfg *cfg, std::string fname, std::string run, std::string* json, std::string* out);
 
 // V8 gc interfaces

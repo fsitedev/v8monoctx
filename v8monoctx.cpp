@@ -5,6 +5,7 @@ static v8::Persistent<v8::Context> context;
 
 /* maps for caching templates (ExecuteFile) */
 static std::map<std::string, time_t> ExecuteScriptModified;
+static std::map<std::string, time_t> LoadConfigModified;
 
 /* maps for caching utilites (LoadFile) */
 static std::map<std::string, time_t> LoadScriptModified;
@@ -315,6 +316,73 @@ bool ExecuteFile(monocfg *cfg, std::string fname, std::string run, std::string* 
 			while(!v8::V8::IdleNotification()) {}
 		cfg->run_idle_notification_loop_time = StopProfile(&t1);
 	}
+
+	return true;
+}
+
+bool LoadConfig(monocfg *cfg, std::string fname) {
+	GlobalError.clear();
+
+	++cfg->request_num;
+
+	cfg->run_idle_notification_loop_time = 0;
+	cfg->run_low_memory_notification_time = 0;
+	cfg->exec_time = 0;
+	cfg->compile_time = 0;
+
+	if (!InitIsolate(cfg))
+		return false;
+
+	v8::HandleScope handle_scope(isolate);
+	v8::TryCatch try_catch;
+
+	// Get file stat
+	struct stat stat_buf;
+	if (cfg->watch_templates) {
+		if (stat(fname.c_str(), &stat_buf) != 0) {
+			std::string _err("Error opening file ");
+			_err += fname;
+			_err += ": ";
+			_err += strerror(errno);
+
+			GlobalError.push_back(_err);
+			return false;
+		}
+	}
+
+	// Reload context if has changed
+    if (LoadConfigModified.find(fname) == LoadConfigModified.end() || (cfg->watch_templates && LoadConfigModified[fname] != stat_buf.st_mtime)) {
+		std::string file = ReadFile(fname);
+		if (file.size() == 0) {
+			std::string _err("File not exists or empty: ");
+			_err += fname;
+	
+			GlobalError.push_back(_err);
+			return false;
+		}
+
+		std::string str;
+		v8::Local<v8::Script> script;
+
+		str = ";(function(g){g.config=g.config||{};g.config.buildCatalog=" + file + "})((0,eval)('this'));";
+
+		if (!CompileSource(cfg, str, &script, &try_catch))
+			return false;
+
+        LoadConfigModified[fname] = stat_buf.st_mtime;
+
+		struct timeval t1; StartProfile(&t1);
+			v8::Local<v8::Value> result = script->Run();
+		cfg->exec_time += StopProfile(&t1);
+
+		if (result.IsEmpty()) {
+			assert(try_catch.HasCaught());
+			ReportException(&try_catch);
+			return false;
+		}
+
+        assert(!try_catch.HasCaught());
+    }
 
 	return true;
 }
